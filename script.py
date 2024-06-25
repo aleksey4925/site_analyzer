@@ -14,6 +14,7 @@ HEADERS = {
 # Глобальный список для хранения ошибок
 errors = []
 
+
 # Функция для проверки валидности URL
 def is_valid_url(url):
     parsed = urlparse(url)
@@ -145,6 +146,7 @@ def main():
     folder_name = "output"
     setup_output_folder(folder_name)  # Настройка выходной папки
 
+    print("АНАЛИЗАТОР САЙТА\n")
     website_url = input("Введите адрес сайта: ").split("#")[0].rstrip("/")
 
     while not is_valid_url(website_url):
@@ -153,60 +155,54 @@ def main():
         )
         website_url = input("Введите адрес сайта: ").split("#")[0].rstrip("/")
 
-    while True:
-        print("Выберите режим работы:")
+    print("Выберите режим работы:")
+    print("1: Только все внешние ссылки на всех внутренних страницах")
+    print("2: Битые ссылки (отличные от 200 и 301)")
+    print("3: Склеенные страницы (отдают 301)")
+    mode = int(input("Введите номер режима: "))
+
+    while mode not in [1, 2, 3]:
+        print("Неверный режим. Пожалуйста, выберите правильный режим работы:")
         print("1: Только все внешние ссылки на всех внутренних страницах")
         print("2: Битые ссылки (отличные от 200 и 301)")
         print("3: Склеенные страницы (отдают 301)")
-        print("0: Выйти")
         mode = int(input("Введите номер режима: "))
 
-        try:
-            mode = int(input("Введите номер режима: "))
-            if mode not in [0, 1, 2, 3]:
-                raise ValueError
-        except ValueError:
-            print("Неверный режим. Пожалуйста, выберите правильный режим.")
-            continue
+    data, columns = crawl_website(
+        website_url, mode
+    )  # Сбор данных в зависимости от режима
 
-        if mode == 0:
-            print("Завершение работы программы.")
-            break
+    if mode == 1:
+        file_path = os.path.join(
+            folder_name, "external_links.xlsx"
+        )  # Путь к файлу с внешними ссылками
+        save_to_excel(data, file_path, columns)
+        print(
+            "Таблица с внешними ссылками сохранена в файл 'output/external_links.xlsx'"
+        )
+    elif mode == 2:
+        file_path = os.path.join(
+            folder_name, "broken_links.xlsx"
+        )  # Путь к файлу с битыми ссылками
+        save_to_excel(data, file_path, columns)
+        print("Таблица с битыми ссылками сохранена в файл 'output/broken_links.xlsx'")
+    elif mode == 3:
+        file_path = os.path.join(
+            folder_name, "redirected_links.xlsx"
+        )  # Путь к файлу с перенаправленными ссылками
+        save_to_excel(data, file_path, columns)
+        print(
+            "Таблица с склеенными ссылками сохранена в файл 'output/redirected_links.xlsx'"
+        )
 
-        data, columns = crawl_website(
-            website_url, mode
-        )  # Сбор данных в зависимости от режима
+    # Вывод ошибок, если они есть
+    if errors:
+        print("Ошибки, возникшие во время выполнения:")
+        for error in errors:
+            print(error)
 
-        if mode == 1:
-            file_path = os.path.join(
-                folder_name, "external_links.xlsx"
-            )  # Путь к файлу с внешними ссылками
-            save_to_excel(data, file_path, columns)
-            print(
-                "Таблица с внешними ссылками сохранена в файл 'output/external_links.xlsx'"
-            )
-        elif mode == 2:
-            file_path = os.path.join(
-                folder_name, "broken_links.xlsx"
-            )  # Путь к файлу с битыми ссылками
-            save_to_excel(data, file_path, columns)
-            print(
-                "Таблица с битыми ссылками сохранена в файл 'output/broken_links.xlsx'"
-            )
-        elif mode == 3:
-            file_path = os.path.join(
-                folder_name, "redirected_links.xlsx"
-            )  # Путь к файлу с перенаправленными ссылками
-            save_to_excel(data, file_path, columns)
-            print(
-                "Таблица с склеенными ссылками сохранена в файл 'output/redirected_links.xlsx'"
-            )
+    input("Нажмите 'Enter' для выхода из программы: ")
 
-        # Вывод ошибок, если они есть
-        if errors:
-            print("Ошибки, возникшие во время выполнения:")
-            for error in errors:
-                print(error)
 
 if __name__ == "__main__":
     main()
