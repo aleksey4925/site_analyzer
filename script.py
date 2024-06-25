@@ -11,6 +11,10 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 }
 
+# Функция для проверки валидности URL
+def is_valid_url(url):
+    parsed = urlparse(url)
+    return bool(parsed.scheme) and bool(parsed.netloc)
 
 # Функция для получения всех внутренних и внешних ссылок на странице
 def get_links(url):
@@ -18,6 +22,7 @@ def get_links(url):
     try:
         response = requests.get(url, headers=HEADERS, timeout=5)
         if response.status_code != 200:
+            print(f"Ошибка при сканировании страницы {url}, статус код: {response.status_code}")
             return set(), set()
 
         soup = BeautifulSoup(response.text, "html.parser")
@@ -39,7 +44,8 @@ def get_links(url):
                 external_links.add((url.split("#")[0].rstrip("/"), href))
 
         return internal_links, external_links
-    except requests.RequestException:
+    except requests.RequestException as e:
+        print(f"Ошибка при сканировании страницы {url}: {e}")
         return set(), set()
 
 
@@ -51,7 +57,8 @@ def check_link(url):
             return 301, response.headers.get("Location", None)
         else:
             return response.status_code, None
-    except requests.RequestException:
+    except requests.RequestException as e:
+        print(f"Ошибка при проверке ссылки {url}: {e}")
         return None, None
 
 
@@ -98,6 +105,9 @@ def crawl_website(base_url, mode):
                     status_code, redirected_url = check_link(link)
                     checked_external_links[link] = (status_code, redirected_url)
 
+                if status_code is None:
+                    continue
+
                 if mode == 2 and status_code not in [200, 301]:
                     broken_links.add((page, link))
                 if mode == 3 and status_code == 301:
@@ -130,6 +140,11 @@ def main():
     setup_output_folder(folder_name)  # Настройка выходной папки
 
     website_url = input("Введите адрес сайта: ").split("#")[0].rstrip("/")
+    
+    while not is_valid_url(website_url):
+        print("Неверный URL. Пожалуйста, введите корректный адрес сайта, формата: http://example.com")
+        website_url = input("Введите адрес сайта: ").split("#")[0].rstrip("/")
+    
     print("Выберите режим работы:")
     print("1: Только все внешние ссылки на всех внутренних страницах")
     print("2: Битые ссылки (отличные от 200 и 301)")

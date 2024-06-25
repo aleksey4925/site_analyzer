@@ -11,7 +11,7 @@ venv/
 env/
 
 # Ignore distributions created by PyInstaller
-dist/
+# dist/
 build/
 *.spec
 
