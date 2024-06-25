@@ -1,2 +1,25 @@
-output
-venv
+# Ignore Python compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ignore output directory
+output/
+
+# Ignore virtual environment directory
+venv/
+env/
+
+# Ignore distributions created by PyInstaller
+dist/
+build/
+*.spec
+
+# Ignore system-specific files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE-specific files
+.vscode/
+.idea/
+*.iml
