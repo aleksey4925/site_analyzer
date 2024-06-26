@@ -1,6 +1,7 @@
 import os
-import shutil
 from urllib.parse import urlparse, urljoin
+import msvcrt
+import datetime
 
 import requests
 from bs4 import BeautifulSoup
@@ -23,13 +24,18 @@ def is_valid_url(url):
 
 # Функция для получения всех внутренних и внешних ссылок на странице
 def get_links(url):
-    print(f"Сканирование страницы: {url} ...")
+    print(f"\nСканирование страницы: {url} ...")
     try:
         response = requests.get(url, headers=HEADERS, timeout=5)
         if response.status_code != 200:
             errors.append(
                 f"Ошибка при сканировании страницы {url}, статус код: {response.status_code}"
             )
+            return set(), set()
+
+        content_type = response.headers.get("Content-Type", "")
+        if "text/html" not in content_type:
+            errors.append(f"Страница {url} не является HTML-документом (Content-Type: {content_type})")
             return set(), set()
 
         soup = BeautifulSoup(response.text, "html.parser")
@@ -59,25 +65,53 @@ def get_links(url):
 # Функция для проверки статуса ссылки(при статусе 301 возвращается так же ссылка для дальнейшего перенаправления)
 def check_link(url):
     try:
-        response = requests.head(url, headers=HEADERS, allow_redirects=False, timeout=5)
-        if response.status_code == 301:
-            return 301, response.headers.get("Location", None)
-        else:
-            return response.status_code, None
+        print(f'Переход по ссылке: {url} ...')
+        response = requests.head(url, headers=HEADERS, allow_redirects=True, timeout=5)
+        print(f'Ответ: {response.url} {response.status_code}')
+        return response.status_code, response.url if response.status_code == 301 else None
     except requests.RequestException as e:
         errors.append(f"Ошибка при проверке ссылки {url}: {e}")
         return None, None
 
 
 # Функция для сохранения данных в Excel файл
-def save_to_excel(data, filename, columns):
-    df = pd.DataFrame(data, columns=columns)
-    df.to_excel(filename, index=False)
+def save_to_excel(data, output_folder_name, url_folder_name, mode_folder_name, columns):
+    try:
+        setup_folder(output_folder_name)
+        setup_folder(os.path.join(output_folder_name, url_folder_name))
+        setup_folder(os.path.join(output_folder_name, url_folder_name, mode_folder_name))
+        # Генерируем имя файла в формате ГГГГ-ММ-ДД-время.xlsx
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        filename = f"{timestamp}.xlsx"
+        filename_path = os.path.join(output_folder_name, url_folder_name, mode_folder_name, filename)
 
+        if os.path.exists(filename_path):
+            print(f"\tФайл '{filename_path}' уже существует. Запись отклонена.")
+            return False
+        else:
+            df = pd.DataFrame(data, columns=columns)
+            df.to_excel(filename_path, index=False)
+            print(f"\tФайл '{filename}' успешно сохранен. Найдено {len(data)} ссылок.")
+            return True
+    except Exception as e:
+        print(f"\tОшибка при сохранении файла '{filename_path}': {e}")
+        return False
 
-# Функция сортировки по страницам и добавления индексов к данным(начиная с первого и попорядку для хорошего отображения в таблицах)
+# Функция удаления дубликатов страниц
+def remove_duplicates(data):
+    no_protocols_page_data = set()
+    for pair in data:
+        page_link = pair[0]
+        no_protocol_page_link = urlparse(page_link).netloc + urlparse(page_link).path
+        no_protocols_page_data.add((no_protocol_page_link, pair[1]))
+    return no_protocols_page_data
+
+# Функция сортировки по страницам
+def sort_links(data):
+    return sorted(list(data), key=lambda pair: pair[0])
+
+# Функция для добавления индексов к данным
 def add_indexes(data):
-    data = sorted(list(data), key=lambda pair: pair[0])
     return [(i + 1, *item) for i, item in enumerate(data)]
 
 
@@ -86,13 +120,9 @@ def crawl_website(base_url, mode):
     visited = set()  # Множество посещенных ссылок
     to_visit = {base_url}  # Множество ссылок для посещения
     external_links = set()  # Множество внешних ссылок
-    broken_links = (
-        set()
-    )  # Множество битых ссылок(как отличных от 200 и 301 статуса, так и неответивших в течение 5 секунд)
+    broken_links = set() # Множество битых ссылок(как отличных от 200 и 301 статуса, так и неответивших в течение 5 секунд)
     redirected_links = set()  # Множество перенаправленных ссылок
-    checked_external_links = (
-        dict()
-    )  # Словарь для проверенных внешних ссылок (запоминает статус коды, оптимизация)
+    checked_external_links = dict() # Словарь для проверенных внешних ссылок (запоминает статус коды, оптимизация)
 
     while to_visit:
         url = to_visit.pop()
@@ -123,85 +153,86 @@ def crawl_website(base_url, mode):
         to_visit.update(internal_links - visited)
 
     if mode == 1:
-        return add_indexes(external_links), ["№", "Страница", "Адрес ссылки"]
+        return add_indexes(sort_links(remove_duplicates(external_links))), ["№", "Страница", "Адрес ссылки"]
     elif mode == 2:
-        return add_indexes(broken_links), ["№", "Страница", "Адрес ссылки"]
+        return add_indexes(sort_links(remove_duplicates(broken_links))), ["№", "Страница", "Адрес ссылки"]
     elif mode == 3:
-        return add_indexes(redirected_links), [
-            "№",
-            "Страница",
-            "Адрес ссылки",
-            "Перенаправлено на",
-        ]
+        return add_indexes(sort_links(remove_duplicates(redirected_links))), ["№", "Страница", "Адрес ссылки", "Перенаправлено на"]
 
 
 # Функция для настройки выходной папки (создание/удаление)
-def setup_output_folder(folder_name):
-    if os.path.exists(folder_name):
-        shutil.rmtree(folder_name)
-    os.makedirs(folder_name)
+def setup_folder(folder_name):
+    if not os.path.exists(folder_name):
+        os.makedirs(folder_name)
 
 
 def main():
-    folder_name = "output"
-    setup_output_folder(folder_name)  # Настройка выходной папки
+    program_name = "АНАЛИЗАТОР САЙТА"
+    output_folder_name = "output"
 
-    print("АНАЛИЗАТОР САЙТА\n")
-    website_url = input("Введите адрес сайта: ").split("#")[0].rstrip("/")
+    while True:
+        print(f"\n{"="*len(program_name)}\n{program_name}\n{"="*len(program_name)}")
+        website_url = input("\nВведите адрес сайта: ").split("#")[0].rstrip("/")
 
-    while not is_valid_url(website_url):
-        print(
-            "Неверный URL. Пожалуйста, введите корректный адрес сайта, формата: http://example.com"
-        )
-        website_url = input("Введите адрес сайта: ").split("#")[0].rstrip("/")
+        while not is_valid_url(website_url):
+            print(
+                "\tНеверный URL. Пожалуйста, введите корректный адрес сайта, формата: http://example.com"
+            )
+            website_url = input("\nВведите адрес сайта: ").split("#")[0].rstrip("/")
 
-    print("Выберите режим работы:")
-    print("1: Только все внешние ссылки на всех внутренних страницах")
-    print("2: Битые ссылки (отличные от 200 и 301)")
-    print("3: Склеенные страницы (отдают 301)")
-    mode = int(input("Введите номер режима: "))
+        url_folder_name = website_url.split("//")[-1].replace("/", "-")
 
-    while mode not in [1, 2, 3]:
-        print("Неверный режим. Пожалуйста, выберите правильный режим работы:")
-        print("1: Только все внешние ссылки на всех внутренних страницах")
-        print("2: Битые ссылки (отличные от 200 и 301)")
-        print("3: Склеенные страницы (отдают 301)")
+        print("\nВыберите режим работы:")
+        print("\t1: Только все внешние ссылки на всех внутренних страницах")
+        print("\t2: Битые ссылки (отличные от 200 и 301)")
+        print("\t3: Склеенные страницы (отдают 301)")
         mode = int(input("Введите номер режима: "))
 
-    data, columns = crawl_website(
-        website_url, mode
-    )  # Сбор данных в зависимости от режима
+        while mode not in [1, 2, 3]:
+            print("\nНеверный режим. Пожалуйста, выберите правильный режим работы:")
+            print("\t1: Только все внешние ссылки на всех внутренних страницах")
+            print("\t2: Битые ссылки (отличные от 200 и 301)")
+            print("\t3: Склеенные страницы (отдают 301)")
+            mode = int(input("Введите номер режима: "))
 
-    if mode == 1:
-        file_path = os.path.join(
-            folder_name, "external_links.xlsx"
-        )  # Путь к файлу с внешними ссылками
-        save_to_excel(data, file_path, columns)
-        print(
-            "Таблица с внешними ссылками сохранена в файл 'output/external_links.xlsx'"
-        )
-    elif mode == 2:
-        file_path = os.path.join(
-            folder_name, "broken_links.xlsx"
-        )  # Путь к файлу с битыми ссылками
-        save_to_excel(data, file_path, columns)
-        print("Таблица с битыми ссылками сохранена в файл 'output/broken_links.xlsx'")
-    elif mode == 3:
-        file_path = os.path.join(
-            folder_name, "redirected_links.xlsx"
-        )  # Путь к файлу с перенаправленными ссылками
-        save_to_excel(data, file_path, columns)
-        print(
-            "Таблица с склеенными ссылками сохранена в файл 'output/redirected_links.xlsx'"
-        )
+        data, columns = crawl_website(
+            website_url, mode
+        )  # Сбор данных в зависимости от режима
 
-    # Вывод ошибок, если они есть
-    if errors:
-        print("Ошибки, возникшие во время выполнения:")
-        for error in errors:
-            print(error)
+        # Вывод ошибок, если они есть
+        if errors:
+            print("\nОшибки, возникшие во время выполнения:")
+            for error in errors:
+                print(f'- {error}')
+            print()
 
-    input("Нажмите 'Enter' для выхода из программы: ")
+        if len(data) == 0:
+            print("\n\tНе найдено ни одной ссылки. Файл не будет сгенерирован.")
+        else:
+            if mode == 1:
+                external_links_folder_name = "external_links"
+                if save_to_excel(data, output_folder_name, url_folder_name, external_links_folder_name, columns):
+                    print(f"\tТаблица с внешними ссылками сохранена в папку '{external_links_folder_name}'")               
+            elif mode == 2:
+                broken_links_folder_name = "broken_links"
+                if save_to_excel(data, output_folder_name, url_folder_name, broken_links_folder_name, columns):
+                    print(f"\tТаблица с битыми ссылками сохранена в папку '{broken_links_folder_name}'")
+            elif mode == 3:
+                redirected_links_folder_name = "redirected_links"
+                if save_to_excel(data, output_folder_name, url_folder_name, redirected_links_folder_name, columns):
+                    print(f"\tТаблица с перенаправленными ссылками сохранена в папку '{redirected_links_folder_name}'")
+
+        print("\nНажмите 'Enter', чтобы сканировать другой сайт или 'Esc' для выхода.")
+
+        # Ожидание ввода пользователя
+        while True:
+            key = msvcrt.getch()
+            if key == b'\x1b':  # ESC
+                return
+            elif key == b'\r':  # Enter
+                break
+            else:
+                print("\nНажмите 'Enter', чтобы сканировать другой сайт или 'Esc' для выхода:")
 
 
 if __name__ == "__main__":
