@@ -86,15 +86,15 @@ def save_to_excel(data, output_folder_name, url_folder_name, mode_folder_name, c
         filename_path = os.path.join(output_folder_name, url_folder_name, mode_folder_name, filename)
 
         if os.path.exists(filename_path):
-            print(f"\tФайл '{filename_path}' уже существует. Запись отклонена.")
+            print(f"\n\tФайл '{filename_path}' уже существует. Запись отклонена.")
             return False
         else:
             df = pd.DataFrame(data, columns=columns)
             df.to_excel(filename_path, index=False)
-            print(f"\tФайл '{filename}' успешно сохранен. Найдено {len(data)} ссылок.")
+            print(f"\n\tФайл '{filename}' успешно сохранен. Найдено {len(data)} ссылок.")
             return True
     except Exception as e:
-        print(f"\tОшибка при сохранении файла '{filename_path}': {e}")
+        print(f"\n\tОшибка при сохранении файла '{filename_path}': {e}")
         return False
 
 # Функция удаления дубликатов страниц
@@ -172,11 +172,12 @@ def main():
 
     while True:
         print(f"\n{"="*len(program_name)}\n{program_name}\n{"="*len(program_name)}")
+        print("\n\tПожалуйста, введите адрес сайта, формата: http://example.com")
         website_url = input("\nВведите адрес сайта: ").split("#")[0].rstrip("/")
 
         while not is_valid_url(website_url):
             print(
-                "\tНеверный URL. Пожалуйста, введите корректный адрес сайта, формата: http://example.com"
+                "\n\tНеверный URL. Пожалуйста, введите корректный адрес сайта, формата: http://example.com"
             )
             website_url = input("\nВведите адрес сайта: ").split("#")[0].rstrip("/")
 
@@ -203,24 +204,24 @@ def main():
         if errors:
             print("\nОшибки, возникшие во время выполнения:")
             for error in errors:
-                print(f'- {error}')
+                print(f'\t{error}')
             print()
 
         if len(data) == 0:
-            print("\n\tНе найдено ни одной ссылки. Файл не будет сгенерирован.")
+            print("\tНе найдено ни одной ссылки. Файл не будет сгенерирован.")
         else:
             if mode == 1:
                 external_links_folder_name = "external_links"
                 if save_to_excel(data, output_folder_name, url_folder_name, external_links_folder_name, columns):
-                    print(f"\tТаблица с внешними ссылками сохранена в папку '{external_links_folder_name}'")               
+                    print(f"\tТаблица с внешними ссылками сохранена в папку '{os.path.join(output_folder_name, url_folder_name, external_links_folder_name)}'")               
             elif mode == 2:
                 broken_links_folder_name = "broken_links"
                 if save_to_excel(data, output_folder_name, url_folder_name, broken_links_folder_name, columns):
-                    print(f"\tТаблица с битыми ссылками сохранена в папку '{broken_links_folder_name}'")
+                    print(f"\tТаблица с битыми ссылками сохранена в папку '{os.path.join(output_folder_name, url_folder_name, broken_links_folder_name)}'")
             elif mode == 3:
                 redirected_links_folder_name = "redirected_links"
                 if save_to_excel(data, output_folder_name, url_folder_name, redirected_links_folder_name, columns):
-                    print(f"\tТаблица с перенаправленными ссылками сохранена в папку '{redirected_links_folder_name}'")
+                    print(f"\tТаблица с перенаправленными ссылками сохранена в папку '{os.path.join(output_folder_name, url_folder_name, redirected_links_folder_name)}'")
 
         print("\nНажмите 'Enter', чтобы сканировать другой сайт или 'Esc' для выхода.")
 
