@@ -24,7 +24,7 @@ def is_valid_url(url):
 
 # Функция для получения всех внутренних и внешних ссылок на странице
 def get_links(url):
-    print(f"\nСканирование страницы: {url} ...")
+    print(f"Сканирование страницы: {url} ...")
     try:
         response = requests.get(url, headers=HEADERS, timeout=5)
         if response.status_code != 200:
@@ -65,10 +65,17 @@ def get_links(url):
 # Функция для проверки статуса ссылки(при статусе 301 возвращается так же ссылка для дальнейшего перенаправления)
 def check_link(url):
     try:
-        print(f'Переход по ссылке: {url} ...')
-        response = requests.head(url, headers=HEADERS, allow_redirects=True, timeout=5)
-        print(f'Ответ: {response.url} {response.status_code}')
-        return response.status_code, response.url if response.status_code == 301 else None
+        print(f'\tПереход по ссылке: {url} ...')
+        # Получаем изначальный статус код и новый URL после первого редиректа
+        response = requests.head(url, headers=HEADERS, allow_redirects=False, timeout=5)
+        initial_status_code = response.status_code
+        if initial_status_code == 301:
+            # Теперь определяем конечный URL после всех перенаправлений
+            response = requests.head(url, headers=HEADERS, allow_redirects=True)
+            final_url = response.url
+            return initial_status_code, final_url
+        else:
+            return initial_status_code, None
     except requests.RequestException as e:
         errors.append(f"Ошибка при проверке ссылки {url}: {e}")
         return None, None
@@ -103,7 +110,7 @@ def remove_duplicates(data):
     for pair in data:
         page_link = pair[0]
         no_protocol_page_link = urlparse(page_link).netloc + urlparse(page_link).path
-        no_protocols_page_data.add((no_protocol_page_link, pair[1]))
+        no_protocols_page_data.add((no_protocol_page_link, *pair[1:]))
     return no_protocols_page_data
 
 # Функция сортировки по страницам
@@ -157,7 +164,7 @@ def crawl_website(base_url, mode):
     elif mode == 2:
         return add_indexes(sort_links(remove_duplicates(broken_links))), ["№", "Страница", "Адрес ссылки"]
     elif mode == 3:
-        return add_indexes(sort_links(remove_duplicates(redirected_links))), ["№", "Страница", "Адрес ссылки", "Перенаправлено на"]
+        return add_indexes(sort_links(remove_duplicates(redirected_links))), ["№", "Страница", "Адрес ссылки", "Конечное перенаправление"]
 
 
 # Функция для настройки выходной папки (создание/удаление)
@@ -195,7 +202,8 @@ def main():
             print("\t2: Битые ссылки (отличные от 200 и 301)")
             print("\t3: Склеенные страницы (отдают 301)")
             mode = int(input("Введите номер режима: "))
-
+        print()
+        
         data, columns = crawl_website(
             website_url, mode
         )  # Сбор данных в зависимости от режима
