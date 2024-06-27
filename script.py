@@ -67,11 +67,11 @@ def check_link(url):
     try:
         print(f'\tПереход по ссылке: {url} ...')
         # Получаем изначальный статус код и новый URL после первого редиректа
-        response = requests.head(url, headers=HEADERS, allow_redirects=False, timeout=5)
+        response = requests.get(url, headers=HEADERS, allow_redirects=False, timeout=5)
         initial_status_code = response.status_code
         if initial_status_code == 301:
             # Теперь определяем конечный URL после всех перенаправлений
-            response = requests.head(url, headers=HEADERS, allow_redirects=True)
+            response = requests.get(url, headers=HEADERS, allow_redirects=True)
             final_url = response.url
             return initial_status_code, final_url
         else:
@@ -216,7 +216,7 @@ def main():
             print()
 
         if len(data) == 0:
-            print("\tНе найдено ни одной ссылки. Файл не будет сгенерирован.")
+            print("\n\tНе найдено ни одной ссылки. Файл не будет сгенерирован.")
         else:
             if mode == 1:
                 external_links_folder_name = "external_links"
